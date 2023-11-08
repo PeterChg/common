@@ -122,7 +122,7 @@ func (jc *JobController) ReconcileJobs(
 		if err := jc.CleanupJob(runPolicy, jobStatus, job); err != nil {
 			return err
 		}
-		
+
 		// At this point the pods may have been deleted.
 		// 1) If the job succeeded, we manually set the replica status.
 		// 2) If any replicas are still active, set their status to succeeded.
@@ -220,55 +220,65 @@ func (jc *JobController) ReconcileJobs(
 	} else {
 		// General cases which need to reconcile
 		if jc.Config.EnableGangScheduling {
-			minMember := totalReplicas
-			queue := ""
-			priorityClass := ""
-			var minResources *v1.ResourceList
+			if JobSuspended(runPolicy) {
+				jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobSuspended", "Job has been suspended. Deleting PodGroup")
+				if err := jc.DeletePodGroup(metaObject); err != nil {
+					jc.Recorder.Eventf(runtimeObject, v1.EventTypeWarning, "FailedDeletePodGroup", "Error deleting: %v", err)
+					return err
+				} else {
+					jc.Recorder.Eventf(runtimeObject, v1.EventTypeNormal, "SuccessfulDeletePodGroup", "Deleted PodGroup: %v", jobName)
+				}
+			} else {
+				minMember := totalReplicas
+				queue := ""
+				priorityClass := ""
+				var minResources *v1.ResourceList
 
-			if runPolicy.SchedulingPolicy != nil {
-				if runPolicy.SchedulingPolicy.MinAvailable != nil {
-					minMember = *runPolicy.SchedulingPolicy.MinAvailable
+				if runPolicy.SchedulingPolicy != nil {
+					if runPolicy.SchedulingPolicy.MinAvailable != nil {
+						minMember = *runPolicy.SchedulingPolicy.MinAvailable
+					}
+
+					if runPolicy.SchedulingPolicy.Queue != "" {
+						queue = runPolicy.SchedulingPolicy.Queue
+					}
+
+					if runPolicy.SchedulingPolicy.PriorityClass != "" {
+						priorityClass = runPolicy.SchedulingPolicy.PriorityClass
+					}
+
+					if runPolicy.SchedulingPolicy.MinResources != nil {
+						minResources = runPolicy.SchedulingPolicy.MinResources
+					}
 				}
 
-				if runPolicy.SchedulingPolicy.Queue != "" {
-					queue = runPolicy.SchedulingPolicy.Queue
+				if minResources == nil {
+					minResources = jc.calcPGMinResources(minMember, replicas)
 				}
 
-				if runPolicy.SchedulingPolicy.PriorityClass != "" {
-					priorityClass = runPolicy.SchedulingPolicy.PriorityClass
+				pgSpec := v1beta1.PodGroupSpec{
+					MinMember:         minMember,
+					Queue:             queue,
+					PriorityClassName: priorityClass,
+					MinResources:      minResources,
 				}
 
-				if runPolicy.SchedulingPolicy.MinResources != nil {
-					minResources = runPolicy.SchedulingPolicy.MinResources
+				syncReplicas := true
+				pg, err := jc.SyncPodGroup(metaObject, pgSpec)
+				if err != nil {
+					log.Warnf("Sync PodGroup %v: %v", jobKey, err)
+					syncReplicas = false
 				}
-			}
 
-			if minResources == nil {
-				minResources = jc.calcPGMinResources(minMember, replicas)
-			}
+				// Delay pods creation until podgroup status is inqueue
+				if pg == nil || pg.Status.Phase == "" || pg.Status.Phase == v1beta1.PodGroupPending {
+					log.Warnf("PodGroup %v unschedulable", jobKey)
+					syncReplicas = false
+				}
 
-			pgSpec := v1beta1.PodGroupSpec{
-				MinMember:         minMember,
-				Queue:             queue,
-				PriorityClassName: priorityClass,
-				MinResources:      minResources,
-			}
-
-			syncReplicas := true
-			pg, err := jc.SyncPodGroup(metaObject, pgSpec)
-			if err != nil {
-				log.Warnf("Sync PodGroup %v: %v", jobKey, err)
-				syncReplicas = false
-			}
-
-			// Delay pods creation until podgroup status is inqueue
-			if pg == nil || pg.Status.Phase == "" || pg.Status.Phase == v1beta1.PodGroupPending {
-				log.Warnf("PodGroup %v unschedulable", jobKey)
-				syncReplicas = false
-			}
-
-			if !syncReplicas {
-				return fmt.Errorf("wait until can syncReplicas")
+				if !syncReplicas {
+					return fmt.Errorf("wait until can syncReplicas")
+				}
 			}
 		}
 
