@@ -110,12 +110,12 @@ func (jc *JobController) ReconcileJobs(
 		}
 
 		if jc.Config.EnableGangScheduling {
-			jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobTerminated", "Job has been terminated. Deleting PodGroup")
+			//jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobTerminated", "Job has been terminated. Deleting PodGroup")
+			log.Infof("Job has been terminated. Deleting PodGroup %s/%s", metaObject.GetNamespace(), metaObject.GetName())
 			if err := jc.DeletePodGroup(metaObject); err != nil {
+				log.Errorf("Error deleting: %v", err)
 				jc.Recorder.Eventf(runtimeObject, v1.EventTypeWarning, "FailedDeletePodGroup", "Error deleting: %v", err)
 				return err
-			} else {
-				jc.Recorder.Eventf(runtimeObject, v1.EventTypeNormal, "SuccessfulDeletePodGroup", "Deleted PodGroup: %v", jobName)
 			}
 		}
 
@@ -200,12 +200,12 @@ func (jc *JobController) ReconcileJobs(
 		}
 
 		if jc.Config.EnableGangScheduling {
-			jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobTerminated", "Job has been terminated. Deleting PodGroup")
+			//jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobTerminated", "Job has been terminated. Deleting PodGroup")
+			log.Infof("Job has been terminated. Deleting PodGroup %s/%s", metaObject.GetNamespace(), metaObject.GetName())
 			if err := jc.DeletePodGroup(metaObject); err != nil {
+				log.Errorf("Error deleting: %v", err)
 				jc.Recorder.Eventf(runtimeObject, v1.EventTypeWarning, "FailedDeletePodGroup", "Error deleting: %v", err)
 				return err
-			} else {
-				jc.Recorder.Eventf(runtimeObject, v1.EventTypeNormal, "SuccessfulDeletePodGroup", "Deleted PodGroup: %v", jobName)
 			}
 		}
 
@@ -221,12 +221,12 @@ func (jc *JobController) ReconcileJobs(
 		// General cases which need to reconcile
 		if jc.Config.EnableGangScheduling {
 			if JobSuspended(runPolicy) {
-				jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobSuspended", "Job has been suspended. Deleting PodGroup")
+				//jc.Recorder.Event(runtimeObject, v1.EventTypeNormal, "JobSuspended", "Job has been suspended. Deleting PodGroup")
+				log.Infof("Job has been terminated. Deleting PodGroup %s/%s", metaObject.GetNamespace(), metaObject.GetName())
 				if err := jc.DeletePodGroup(metaObject); err != nil {
+					log.Errorf("Error deleting: %v", err)
 					jc.Recorder.Eventf(runtimeObject, v1.EventTypeWarning, "FailedDeletePodGroup", "Error deleting: %v", err)
 					return err
-				} else {
-					jc.Recorder.Eventf(runtimeObject, v1.EventTypeNormal, "SuccessfulDeletePodGroup", "Deleted PodGroup: %v", jobName)
 				}
 			} else {
 				minMember := totalReplicas
