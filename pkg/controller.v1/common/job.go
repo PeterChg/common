@@ -344,9 +344,11 @@ func (jc *JobController) PastBackoffLimit(jobName string, runPolicy *apiv1.RunPo
 func (jc *JobController) CleanupJob(runPolicy *apiv1.RunPolicy, jobStatus apiv1.JobStatus, job interface{}) error {
 	currentTime := time.Now()
 	metaObject, _ := job.(metav1.Object)
+	var defaultTtl int32 = 15552000 //six months
+
 	ttl := runPolicy.TTLSecondsAfterFinished
 	if ttl == nil {
-		return nil
+		ttl = &defaultTtl
 	}
 	duration := time.Second * time.Duration(*ttl)
 	if jobStatus.CompletionTime == nil {
